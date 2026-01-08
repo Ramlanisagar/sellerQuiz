@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -8,17 +9,21 @@ const ExcelJS = require('exceljs');
 const { time, timeStamp } = require('console');
 
 const app = express();
-app.use(cors());
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = process.env.DATA_DIR ? path.join(__dirname, process.env.DATA_DIR) : path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const QUIZZES_FILE = path.join(DATA_DIR, 'quizzes.json');
 const ATTEMPTS_FILE = path.join(DATA_DIR, 'attempts.json');
 const SELLERS_FILE = path.join(DATA_DIR, 'sellers.json');
 
-const JWT_SECRET = 'super-secret-jwt-key-2025'; // Use same secret everywhere
-const ATTEMPT_SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 2 minutes
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-2025';
+const ATTEMPT_SESSION_TIMEOUT_MS = parseInt(process.env.ATTEMPT_SESSION_TIMEOUT_MS) || 15 * 60 * 1000;
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 
@@ -642,4 +647,6 @@ setInterval(() => {
 }, 60 * 1000); // every 1 minute
 
 
-app.listen(5000, () => console.log('Backend running on http://localhost:5000'));
+const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT} (${NODE_ENV} mode)`));
