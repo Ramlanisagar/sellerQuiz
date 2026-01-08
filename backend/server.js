@@ -608,45 +608,57 @@ app.get('/api/attempts/all', authenticate, isAdmin, (req, res) => {
 // ================= SESSION AUTO-EXPIRY WORKER =================
 
 // Runs every 1 minute to auto-expire abandoned quiz attempts
-setInterval(() => {
-  try {
-    const attempts = readJSON(ATTEMPTS_FILE);
-    const now = Date.now();
-    let changed = false;
+function startSessionExpiryWorker() {
+  return setInterval(() => {
+    try {
+      const attempts = readJSON(ATTEMPTS_FILE);
+      const now = Date.now();
+      let changed = false;
 
-    Object.values(attempts).forEach(userAttempts => {
-      Object.values(userAttempts).forEach(quizAttempts => {
+      Object.values(attempts).forEach(userAttempts => {
+        Object.values(userAttempts).forEach(quizAttempts => {
 
-            if (!Array.isArray(quizAttempts)) {
-      quizAttempts = [quizAttempts];
-    }
-        quizAttempts.forEach(attempt => {
-          if (
-            attempt.status === 'in-progress' &&
-            attempt.startedAt &&
-            now - new Date(attempt.startedAt).getTime() > ATTEMPT_SESSION_TIMEOUT_MS
-          ) {
-            attempt.status = 'expired';
-            attempt.abandoned = true;
-            attempt.passed = false;
-            attempt.score = 0;
-            attempt.expiredAt = new Date().toISOString();
-            changed = true;
+          if (!Array.isArray(quizAttempts)) {
+            quizAttempts = [quizAttempts];
           }
+          quizAttempts.forEach(attempt => {
+            if (
+              attempt.status === 'in-progress' &&
+              attempt.startedAt &&
+              now - new Date(attempt.startedAt).getTime() > ATTEMPT_SESSION_TIMEOUT_MS
+            ) {
+              attempt.status = 'expired';
+              attempt.abandoned = true;
+              attempt.passed = false;
+              attempt.score = 0;
+              attempt.expiredAt = new Date().toISOString();
+              changed = true;
+            }
+          });
         });
       });
-    });
 
-    if (changed) {
-      writeJSON(ATTEMPTS_FILE, attempts);
-      console.log('Expired abandoned quiz sessions');
+      if (changed) {
+        writeJSON(ATTEMPTS_FILE, attempts);
+        console.log('Expired abandoned quiz sessions');
+      }
+    } catch (err) {
+      console.error('Session expiry job failed:', err);
     }
-  } catch (err) {
-    console.error('Session expiry job failed:', err);
-  }
-}, 60 * 1000); // every 1 minute
+  }, 60 * 1000); // every 1 minute
+}
 
 
-const PORT = process.env.PORT || 5000;
-const NODE_ENV = process.env.NODE_ENV || 'development';
-app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT} (${NODE_ENV} mode)`));
+// If the file is run directly (node server.js), start the worker and listen.
+// When loaded by serverless platforms (e.g. Vercel), export a handler instead
+// and do not start background timers.
+if (require.main === module) {
+  // standalone mode
+  startSessionExpiryWorker();
+  const PORT = process.env.PORT || 5000;
+  const NODE_ENV = process.env.NODE_ENV || 'development';
+  app.listen(PORT, () => console.log(`Backend running on http://localhost:${PORT} (${NODE_ENV} mode)`));
+} else {
+  // serverless mode (e.g. Vercel) - export request handler
+  module.exports = (req, res) => app(req, res);
+}
